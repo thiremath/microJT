@@ -11,6 +11,24 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+# Load environment variables from .env file for local development
+def load_env_file():
+    """Load environment variables from .env file"""
+    if os.path.exists('.env'):
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        os.environ[key] = value
+            print("[+] Loaded environment variables from .env file")
+        except Exception as e:
+            print(f"[-] Error loading .env file: {e}")
+
+# Load .env file if it exists
+load_env_file()
+
 # Try to import webdriver-manager for cloud deployment
 try:
     from webdriver_manager.chrome import ChromeDriverManager
@@ -25,9 +43,15 @@ HASH_FILE = "gs_jobs_hash.txt"
 JOBS_DATA_FILE = "gs_jobs_data.txt"
 URL = "https://higher.gs.com/results?EXPERIENCE_LEVEL=Analyst|Associate&JOB_FUNCTION=Software%20Engineering&LOCATION=Albany|New%20York|Atlanta|Boston|Chicago|Dallas|Houston|Irving|Richardson|Draper|Salt%20Lake%20City|Jersey%20City|Los%20Angeles|Newport%20Beach|San%20Francisco|Miami|West%20Palm%20Beach|Philadelphia|Seattle|Troy|Washington|Wilmington&page=1&sort=POSTED_DATE"
 
-# Telegram configuration - use environment variables if available
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', "7623240757:AAHiPQ8QuwZN8SYRvtCVl4RwvF04nCTwP3E")
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', "1059855653")
+# Telegram configuration - use environment variables (required)
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+# Validate required environment variables
+if not TELEGRAM_BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
+if not TELEGRAM_CHAT_ID:
+    raise ValueError("TELEGRAM_CHAT_ID environment variable is required")
 
 # --- Function: Setup Chrome Driver ---
 def setup_chrome_driver():

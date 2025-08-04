@@ -73,17 +73,25 @@ website_tracker/
 
 ## ⚙️ Configuration
 
-Edit `tracker.py` to customize:
+**Environment Variables (Required):**
 
+You must set these environment variables in Render dashboard:
+
+- `TELEGRAM_BOT_TOKEN` = Your Telegram bot token
+- `TELEGRAM_CHAT_ID` = Your Telegram chat ID
+- `CHECK_INTERVAL` = 600 (optional, defaults to 10 minutes)
+
+**Local Development:**
+
+For local testing, create a `.env` file:
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+CHECK_INTERVAL=600
+```
+
+**Target URL:**
 ```python
-# Check interval (seconds)
-CHECK_INTERVAL = 600  # 10 minutes
-
-# Telegram settings
-TELEGRAM_BOT_TOKEN = "your_bot_token"
-TELEGRAM_CHAT_ID = "your_chat_id"
-
-# Target URL
 URL = "https://higher.gs.com/results?..."
 ```
 
