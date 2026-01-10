@@ -2,8 +2,9 @@
 .env
 
 # Data files (auto-generated)
-gs_jobs_hash.txt
-gs_jobs_data.txt
+data/
+*_hash.txt
+*_data.json
 
 # Python
 __pycache__/

@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: gs-job-tracker
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    plan: free
-    autoDeploy: true 

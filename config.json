@@ -1,0 +1,48 @@
+{
+  "websites": [
+    {
+      "name": "Goldman Sachs Jobs",
+      "url": "https://higher.gs.com/results?EXPERIENCE_LEVEL=Analyst|Associate&JOB_FUNCTION=Data%20Analytics|Data%20Analytics%20%26%20Reporting|Software%20Engineering&LOCATION=Menlo%20Park|Newport%20Beach|San%20Francisco|Miami|West%20Palm%20Beach|Chicago|Boston|Detroit|Jersey%20City|Albany|New%20York|Dallas|Houston|Richardson|Salt%20Lake%20City&page=1&sort=POSTED_DATE",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Goldman Sachs - Data Analytics, Reporting & Software Engineering Jobs (Analyst/Associate)"
+    },
+    {
+      "name": "Barclays Jobs",
+      "url": "https://search.jobs.barclays/search-jobs/United%20States/13015/2/6252001/39x76/-98x5/50/2",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Barclays - United States Job Listings"
+    },
+    {
+      "name": "Microsoft Careers",
+      "url": "https://apply.careers.microsoft.com/careers?domain=microsoft.com&start=0&location=United+States&pid=1970393556639438&sort_by=timestamp&filter_include_remote=1&filter_profession=software+engineering%2Cresearch%252C%2520applied%252C%2520%2526%2520data%2520sciences",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Microsoft - Software Engineering, Research, Applied & Data Sciences (US, Remote)"
+    },
+    {
+      "name": "Apple Jobs",
+      "url": "https://jobs.apple.com/en-us/search?location=united-states-USA&team=machine-learning-infrastructure-MLAI-MLI+deep-learning-and-reinforcement-learning-MLAI-DLRL+natural-language-processing-and-speech-technologies-MLAI-NLP+computer-vision-MLAI-CV+applied-research-MLAI-AR+apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD+core-operating-systems-SFTWR-COS+devops-and-site-reliability-SFTWR-DSR+engineering-project-management-SFTWR-EPM+information-systems-and-technology-SFTWR-ISTECH+machine-learning-and-ai-SFTWR-MCHLN+security-and-privacy-SFTWR-SEC+software-quality-automation-and-tools-SFTWR-SQAT+wireless-software-SFTWR-WSFT+business-intelligence-and-analytics-OPMFG-BIA",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Apple - ML/AI, Software Engineering, DevOps, Security & Analytics (US)"
+    },
+    {
+      "name": "PayPal Careers",
+      "url": "https://paypal.eightfold.ai/careers?domain=paypal.com&start=0&location=United+States&sort_by=timestamp&filter_include_remote=1&filter_job_category=Software+Engineering%2CData+Science%2CMachine+Learning+Engineering",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "PayPal - Software Engineering, Data Science & ML Engineering (US, Remote)"
+    }
+  ],
+  "telegram": {
+    "bot_token": null,
+    "chat_id": null
+  },
+  "global_settings": {
+    "default_check_interval": 600,
+    "page_load_wait": 8,
+    "extract_content": true
+  }
+}

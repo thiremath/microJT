@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Web service wrapper for GS Job Tracker
+Web service wrapper for Generic Website Tracker
 This allows the tracker to run on Render's free tier as a web service
 """
 
@@ -11,10 +11,7 @@ from flask import Flask, jsonify
 from datetime import datetime
 
 # Import the tracker functions
-from tracker import check_for_changes, send_telegram_alert, load_env_file
-
-# Load environment variables
-load_env_file()
+from tracker import CONFIG, monitor_website, send_telegram_alert
 
 app = Flask(__name__)
 
@@ -24,7 +21,8 @@ tracker_status = {
     'last_check': None,
     'start_time': None,
     'checks_performed': 0,
-    'errors': []
+    'errors': [],
+    'websites': []
 }
 
 def run_tracker():
@@ -34,43 +32,53 @@ def run_tracker():
     tracker_status['running'] = True
     tracker_status['start_time'] = datetime.now().isoformat()
     
-    print("🚀 Starting GS Job Tracker in background...")
+    print("🚀 Starting Generic Website Tracker in background...")
+    
+    # Get enabled websites
+    websites = [w for w in CONFIG.get('websites', []) if w.get('enabled', True)]
+    tracker_status['websites'] = [w['name'] for w in websites]
     
     # Send startup message
     try:
-        send_telegram_alert("🚀 <b>GS Job Tracker Started</b>\n\nMonitoring for new job postings on Render...")
+        website_list = "\n".join([f"• {w['name']}" for w in websites])
+        send_telegram_alert(
+            f"🚀 <b>Website Tracker Started</b>\n\n"
+            f"📊 Monitoring {len(websites)} website(s) on Render:\n{website_list}"
+        )
     except Exception as e:
         print(f"[-] Error sending startup message: {e}")
     
-    while tracker_status['running']:
+    # Create data directory
+    os.makedirs('data', exist_ok=True)
+    
+    # Monitor all websites
+    if len(websites) == 1:
+        # Single website - simple loop
+        monitor_website(websites[0])
+    else:
+        # Multiple websites - use threads
+        threads = []
+        for website in websites:
+            thread = threading.Thread(target=monitor_website, args=(website,), daemon=True)
+            thread.start()
+            threads.append(thread)
+        
+        # Keep main thread alive
         try:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running background check...")
-            check_for_changes()
-            tracker_status['last_check'] = datetime.now().isoformat()
-            tracker_status['checks_performed'] += 1
-            
-            # Wait for next check (10 minutes)
-            time.sleep(600)
-            
-        except Exception as e:
-            error_msg = f"Background tracker error: {str(e)}"
-            print(f"[-] {error_msg}")
-            tracker_status['errors'].append({
-                'time': datetime.now().isoformat(),
-                'error': str(e)
-            })
-            
-            # Wait a bit before retrying
-            time.sleep(60)
+            while True:
+                time.sleep(60)
+        except KeyboardInterrupt:
+            print("\n[!] Stopping tracker...")
 
 @app.route('/')
 def home():
     """Home page showing tracker status"""
     return jsonify({
         'status': 'running',
-        'service': 'GS Job Tracker',
+        'service': 'Generic Website Tracker',
         'tracker_status': tracker_status,
-        'message': 'Tracker is running in background. Check Telegram for notifications.'
+        'message': 'Tracker is running in background. Check Telegram for notifications.',
+        'websites': tracker_status.get('websites', [])
     })
 
 @app.route('/health')
@@ -79,16 +87,18 @@ def health():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'tracker_running': tracker_status['running']
+        'tracker_running': tracker_status['running'],
+        'websites_monitored': len(tracker_status.get('websites', []))
     })
 
 @app.route('/status')
 def status():
     """Detailed status endpoint"""
     return jsonify({
-        'service': 'GS Job Tracker',
+        'service': 'Generic Website Tracker',
         'tracker_status': tracker_status,
         'environment': 'Render Web Service',
+        'websites': tracker_status.get('websites', []),
         'uptime': datetime.now().isoformat() if tracker_status['start_time'] else None
     })
 
@@ -102,4 +112,5 @@ if __name__ == '__main__':
     print("🏥 Health check available at: /health")
     
     # Run the Flask app
-    app.run(host='0.0.0.0', port=10000, debug=False) 
+    app.run(host='0.0.0.0', port=10000, debug=False)
+ 
