@@ -88,6 +88,33 @@
       "enabled": true,
       "check_interval": 600,
       "description": "ServiceNow - Engineering, IT & Digital Technology Early Career Jobs (US)"
+    },
+    {
+      "name": "Micron Technology Careers",
+      "url": "https://careers.micron.com/careers?start=0&location=United+States&pid=30425005&sort_by=timestamp&filter_include_remote=1&filter_skills=Python%2CData+Analysis&filter_seniority=1",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Micron Technology - Python, Data Analysis Jobs (US, Remote, Entry Level)"
+    },
+    {
+      "name": "Salesforce Careers",
+      "url": "https://careers.salesforce.com/en/jobs/?search=&country=United+States+of+America&team=Data&team=Enterprise+Technology+%26+Infrastructure&team=Software+Engineering&jobtype=New+Grads&pagesize=20#results",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Salesforce - Data, Enterprise Technology & Infrastructure, Software Engineering (New Grads, US)"
+    },
+    {
+      "name": "Adobe Careers",
+      "url": "https://careers.adobe.com/us/en/search-results?qcountry=United%20States%20of%20America",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Adobe - University Graduate, Engineering and Product (US, Most Recent)",
+      "interactive": true,
+      "filters": {
+        "experience_level": "University Graduate",
+        "teams": ["Engineering and Product"],
+        "sort_by": "Most recent"
+      }
     }
   ],
   "telegram": {

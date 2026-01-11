@@ -12,7 +12,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from filters import apply_cisco_filters, apply_cvs_filters
+from filters import apply_cisco_filters, apply_cvs_filters, apply_adobe_filters
 from oracle_hcm_extractor import extract_oracle_hcm_jobs
 
 # Load environment variables from .env file for local development
@@ -272,6 +272,44 @@ WEBSITE_PATTERNS = {
         'job_patterns': ["a[href*='/job/']", ".job-grid-item a", ".job-grid-item_link", "[class*='job-grid-item'] a", "[aria-labelledby] a"],
         'url_pattern': r'/job/\d+/',
         'validation': lambda href, text: re.search(r'/job/\d+/', href.lower()) is not None
+    },
+    'micron': {
+        'url_keywords': ['careers.micron.com', 'micron.com', 'micron'],
+        'job_patterns': [
+            "a[href*='/job/']", 
+            "a[href*='/careers/job/']",
+            ".position-title a",
+            ".job-card a",
+            "[class*='position'] a",
+            "[class*='job-card'] a",
+            "[data-testid*='job'] a",
+            "[data-testid*='position'] a"
+        ],
+        'url_pattern': r'(/careers/job/|/job/)[^/?]+',
+        'validation': lambda href, text: (re.search(r'(/careers/job/|/job/)[^/?]+', href.lower()) is not None and 
+                                         not any(path in href.lower() for path in ['/dashboard', '/profile', '/settings', '/applications', '/saved']))
+    },
+    'salesforce': {
+        'url_keywords': ['careers.salesforce.com', 'salesforce.com', 'salesforce'],
+        'job_patterns': ["a[href*='/jobs/']", "a[href*='/jobs']", "[data-testid*='job'] a", ".job-card a", ".position-title a"],
+        'url_pattern': r'/jobs/[^/]+',
+        'validation': lambda href, text: (re.search(r'/jobs/[^/]+', href.lower()) is not None and 
+                                         not any(path in href.lower() for path in ['/jobs/?', '/jobs#', '/jobs/search', '/jobs/saved']))
+    },
+    'adobe': {
+        'url_keywords': ['careers.adobe.com', 'adobe.com', 'adobe'],
+        'job_patterns': [
+            "a[href*='/job/']", 
+            "a[href*='/us/en/job/']",
+            ".job-card a", 
+            ".position-title a",
+            "[class*='job'] a",
+            "[class*='position'] a",
+            "[data-testid*='job'] a"
+        ],
+        'url_pattern': r'/job/[^/?]+',
+        'validation': lambda href, text: (re.search(r'/job/[^/?]+', href.lower()) is not None and 
+                                         not any(path in href.lower() for path in ['/search-results', '/jobs?', '/jobs#']))
     }
 }
 
@@ -308,10 +346,22 @@ def _extract_job_count(page_text):
                 return max(numbers), str(matches[0])
     return 0, ''
 
+# Pre-compile skip keywords as set for O(1) lookup
+_SKIP_KEYWORDS = frozenset(['apply', 'view all', 'see more', 'next', 'previous', 'page', 'search', 
+                            'filter', 'saved jobs', 'applied jobs', 'recommended', 'latest vacancies', 
+                            'vacancies', 'saved job', 'jobcart', 'navigating here', 'action center'])
+
+# Pre-compile regex patterns for job ID extraction
+_RE_JOB_ID = re.compile(r'/job/([^/?]+)')
+_RE_JOB_ID_ALPHANUMERIC = re.compile(r'[A-Z0-9]')
+_RE_CVS_JOB_ID = re.compile(r'/job/R\d+/')
+_RE_ADOBE_MICRON_JOB = re.compile(r'(?:/careers)?/job/([^/?]+)')
+
 def _extract_jobs_from_links(driver, website_config, website_url, website_name, max_links=100):
     """Extract jobs from links using website-specific patterns"""
     jobs = []
     url_lower = website_url.lower()
+    name_lower = website_name.lower()
     
     if not website_config:
         # Generic fallback patterns
@@ -329,9 +379,7 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
     ]
     
     all_selectors = job_patterns + common_selectors
-    skip_keywords = ['apply', 'view all', 'see more', 'next', 'previous', 'page', 'search', 
-                    'filter', 'saved jobs', 'applied jobs', 'recommended', 'latest vacancies', 
-                    'vacancies', 'saved job', 'jobcart', 'navigating here', 'action center']
+    validation_func = website_config.get('validation') if website_config else None
     
     for selector in all_selectors:
         try:
@@ -350,22 +398,26 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
                         except:
                             continue
                     
+                    if not href or not href.strip():
+                        continue
+                    
                     text = link.text.strip()
-                    if not href or not href.strip() or not text or len(text) <= 5:
+                    if not text or len(text) <= 5:
                         continue
                     
                     href_lower = href.lower()
+                    text_lower = text.lower()
                     
                     # Validate link using website-specific validation
-                    is_job_link = False
-                    if website_config and website_config.get('validation'):
-                        is_job_link = website_config['validation'](href, text)
+                    if validation_func:
+                        is_job_link = validation_func(href, text)
                     else:
-                        # Generic validation
+                        # Generic validation - use set for faster lookup
                         is_job_link = any(pattern in href_lower for pattern in 
                                          ['/job', '/roles', '/details', '/job_details', '/career', '/position', '/jobs'])
                     
-                    if is_job_link and not any(skip in text.lower() for skip in skip_keywords):
+                    # Use set for O(1) lookup instead of list iteration
+                    if is_job_link and not any(skip in text_lower for skip in _SKIP_KEYWORDS):
                         jobs.append({
                             'title': text[:200],
                             'url': href,
@@ -382,15 +434,19 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
     
     return jobs
 
+# Pre-compile job keywords as set for faster lookup
+_JOB_KEYWORDS = frozenset(['engineer', 'analyst', 'developer', 'manager', 'specialist', 
+                          'associate', 'director', 'scientist'])
+
 def _extract_jobs_from_headings(driver, website_url, website_name, max_headings=50):
     """Extract jobs from headings as fallback method"""
     jobs = []
     url_lower = website_url.lower()
+    name_lower = website_name.lower()
+    is_cvs = 'cvshealth.com' in url_lower or 'cvs' in name_lower
     
     try:
         headings = driver.find_elements(By.CSS_SELECTOR, "h1, h2, h3, h4, h5, h6")
-        job_keywords = ['engineer', 'analyst', 'developer', 'manager', 'specialist', 
-                       'associate', 'director', 'scientist']
         
         for heading in headings[:max_headings]:
             try:
@@ -398,7 +454,9 @@ def _extract_jobs_from_headings(driver, website_url, website_name, max_headings=
                 if not text or len(text) <= 10 or len(text) >= 200:
                     continue
                 
-                if not any(keyword in text.lower() for keyword in job_keywords):
+                text_lower = text.lower()
+                # Use set for O(1) lookup instead of list iteration
+                if not any(keyword in text_lower for keyword in _JOB_KEYWORDS):
                     continue
                 
                 # Try to find associated link
@@ -415,7 +473,7 @@ def _extract_jobs_from_headings(driver, website_url, website_name, max_headings=
                 
                 if href and href.strip():
                     # Validate URL for CVS Health
-                    if 'cvshealth.com' in url_lower or 'cvs' in website_name.lower():
+                    if is_cvs:
                         if re.search(r'/job/R\d+/', href.lower()):
                             jobs.append({
                                 'title': text,
@@ -442,12 +500,14 @@ def extract_job_postings(driver, website_name):
         print(f"[+] Starting job extraction for {website_name}...")
         time.sleep(PAGE_LOAD_WAIT)
         
+        # Cache frequently used values
         page_title = driver.title
         print(f"[+] Page title: {page_title}")
         
         page_text = driver.find_element(By.TAG_NAME, "body").text
         current_url = driver.current_url
         current_url_lower = current_url.lower()
+        name_lower = website_name.lower()
         
         # Initialize job data structure
         job_data = {
@@ -470,8 +530,12 @@ def extract_job_postings(driver, website_name):
         website_config = _get_website_config(current_url_lower, website_name)
         
         # Special handling for Oracle Cloud HCM sites
-        if website_config and website_config.get('url_keywords', []) and any('oraclecloud' in kw or 'jpmc' in kw or 'jpmorgan' in kw for kw in website_config['url_keywords']):
-            jobs = extract_oracle_hcm_jobs(driver, website_name, current_url, current_url_lower)
+        if website_config and website_config.get('url_keywords', []):
+            url_keywords = website_config['url_keywords']
+            if any('oraclecloud' in kw or 'jpmc' in kw or 'jpmorgan' in kw for kw in url_keywords):
+                jobs = extract_oracle_hcm_jobs(driver, website_name, current_url, current_url_lower)
+            else:
+                jobs = []
         else:
             jobs = []
         
@@ -479,60 +543,154 @@ def extract_job_postings(driver, website_name):
         if not jobs:
             jobs = _extract_jobs_from_links(driver, website_config, current_url_lower, website_name)
         
-        # Special lenient fallback for CVS Health if strict pattern failed
-        if not jobs and ('cvshealth.com' in current_url_lower or 'cvs' in website_name.lower()):
-            print("[+] No jobs found with strict pattern, trying lenient approach for CVS Health...")
-            try:
-                all_job_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/job/']")
-                print(f"[+] Found {len(all_job_links)} links with /job/ pattern")
-                non_job_paths = ['/jointalentcommunity', '/careerareas', '/life', '/who-we-are', 
-                                '/benefits', '/diversity', '/hiring-process', '/events', 
-                                '/in-store', '/pharmacy', '/clinical', '/warehouse', 
-                                '/corporate', '/innovation-and-technology', '/customer-care', 
-                                '/students', '/international', '/search-results']
-                skip_keywords = ['apply', 'view all', 'see more', 'next', 'previous', 'page', 'search', 'filter']
-                
-                for link in all_job_links[:100]:
-                    try:
-                        href = link.get_attribute("href") or driver.execute_script("return arguments[0].href;", link)
-                        if not href or not href.strip():
-                            continue
-                        
-                        href_lower = href.lower()
-                        text = link.text.strip()
-                        
-                        if '/job/' in href_lower and text and len(text) > 5:
-                            is_non_job = any(path in href_lower for path in non_job_paths)
-                            if not is_non_job and not any(skip in text.lower() for skip in skip_keywords):
-                                job_id_match = re.search(r'/job/([^/]+)', href_lower)
+        # Generic lenient fallback for specific websites if strict pattern failed
+        if not jobs:
+            # Check which site needs lenient extraction (cache checks)
+            is_cvs = 'cvshealth.com' in current_url_lower or 'cvs' in name_lower
+            is_adobe = 'careers.adobe.com' in current_url_lower or 'adobe' in name_lower
+            is_micron = 'careers.micron.com' in current_url_lower or 'micron' in name_lower
+            
+            if is_cvs:
+                print("[+] No jobs found with strict pattern, trying lenient approach for CVS Health...")
+                try:
+                    all_job_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/job/']")
+                    print(f"[+] Found {len(all_job_links)} links with /job/ pattern")
+                    non_job_paths = frozenset(['/jointalentcommunity', '/careerareas', '/life', '/who-we-are', 
+                                              '/benefits', '/diversity', '/hiring-process', '/events', 
+                                              '/in-store', '/pharmacy', '/clinical', '/warehouse', 
+                                              '/corporate', '/innovation-and-technology', '/customer-care', 
+                                              '/students', '/international', '/search-results'])
+                    
+                    for link in all_job_links[:100]:
+                        try:
+                            href = link.get_attribute("href") or driver.execute_script("return arguments[0].href;", link)
+                            if not href or not href.strip():
+                                continue
+                            
+                            href_lower = href.lower()
+                            text = link.text.strip()
+                            
+                            if '/job/' in href_lower and text and len(text) > 5:
+                                if any(path in href_lower for path in non_job_paths):
+                                    continue
+                                text_lower = text.lower()
+                                if any(skip in text_lower for skip in _SKIP_KEYWORDS):
+                                    continue
+                                job_id_match = _RE_JOB_ID.search(href_lower)
                                 if job_id_match:
                                     job_id = job_id_match.group(1)
-                                    if re.search(r'[A-Z0-9]', job_id) and len(job_id) > 3:
+                                    if _RE_JOB_ID_ALPHANUMERIC.search(job_id) and len(job_id) > 3:
                                         jobs.append({
                                             'title': text[:200],
                                             'url': href,
                                             'identifier': f"{text[:50]}_{href[-30:]}"
                                         })
-                    except:
-                        continue
-                
-                if jobs:
-                    print(f"[+] Found {len(jobs)} jobs with lenient approach")
-            except Exception as e:
-                print(f"[-] Error in lenient CVS Health extraction: {e}")
+                        except:
+                            continue
+                    
+                    if jobs:
+                        print(f"[+] Found {len(jobs)} jobs with lenient approach")
+                except Exception as e:
+                    print(f"[-] Error in lenient CVS Health extraction: {e}")
+            
+            elif is_adobe or is_micron:
+                site_name = 'Adobe' if is_adobe else 'Micron'
+                print(f"[+] No jobs found with strict pattern, trying lenient approach for {site_name}...")
+                try:
+                    # Try multiple selectors
+                    selectors = ["a[href*='/job/']", "a[href*='/careers/job/']", "a[href*='/us/en/job/']",
+                                ".position-title a", ".job-card a", "[class*='position'] a", 
+                                "[class*='job'] a", "[data-testid*='position'] a", "[data-testid*='job'] a"]
+                    
+                    all_links = []
+                    for selector in selectors:
+                        try:
+                            links = driver.find_elements(By.CSS_SELECTOR, selector)
+                            all_links.extend(links)
+                        except:
+                            continue
+                    
+                    if all_links:
+                        print(f"[+] Found {len(all_links)} total links with various selectors")
+                        # Use frozensets for O(1) lookup
+                        non_job_paths = frozenset(['/search-results', '/careers', '/jobs?', '/dashboard', 
+                                                   '/profile', '/settings', '/applications', '/saved'])
+                        base_url = 'https://careers.adobe.com' if is_adobe else 'https://careers.micron.com'
+                        job_pattern = _RE_ADOBE_MICRON_JOB  # Use pre-compiled pattern
+                        invalid_job_ids = frozenset(['search', 'results', 'saved', 'applied'])
+                        
+                        seen_urls = set()
+                        for link in all_links[:200]:
+                            try:
+                                href = link.get_attribute("href")
+                                if not href or not href.strip():
+                                    href = driver.execute_script("return arguments[0].href;", link)
+                                
+                                if not href or not href.strip():
+                                    continue
+                                
+                                if href.startswith('/'):
+                                    href = f"{base_url}{href}"
+                                
+                                if href in seen_urls:
+                                    continue
+                                seen_urls.add(href)
+                                
+                                href_lower = href.lower()
+                                text = link.text.strip()
+                                
+                                if '/job/' in href_lower and text and len(text) > 5:
+                                    # Use set intersection for faster check
+                                    if any(path in href_lower for path in non_job_paths):
+                                        continue
+                                    text_lower = text.lower()
+                                    if any(skip in text_lower for skip in _SKIP_KEYWORDS):
+                                        continue
+                                    
+                                    job_match = job_pattern.search(href_lower)
+                                    if job_match:
+                                        job_id = job_match.group(1)
+                                        if job_id and len(job_id) > 3 and job_id not in invalid_job_ids:
+                                            jobs.append({
+                                                'title': text[:200],
+                                                'url': href,
+                                                'identifier': f"{text[:50]}_{href[-30:]}"
+                                            })
+                            except:
+                                continue
+                    
+                    if jobs:
+                        print(f"[+] Found {len(jobs)} jobs with lenient approach for {site_name}")
+                except Exception as e:
+                    print(f"[-] Error in lenient {site_name} extraction: {e}")
+                    import traceback
+                    traceback.print_exc()
         
         # Fallback: extract from headings if still no jobs
         if not jobs:
             jobs = _extract_jobs_from_headings(driver, current_url_lower, website_name)
         
-        # Remove duplicates
+        # Remove duplicates while preserving extraction order
+        # Python dicts maintain insertion order, so first occurrence is preserved
         unique_jobs = {}
         for job in jobs:
             identifier = job.get('identifier', job.get('title', ''))
             if identifier and identifier not in unique_jobs:
                 unique_jobs[identifier] = job
         
+        # Convert back to list - order is preserved (first occurrence of each job)
         jobs = list(unique_jobs.values())
+        
+        # Limit to top 8 jobs for specific websites (cache name_lower check)
+        name_lower = website_name.lower()
+        is_top8_site = 'cvs' in name_lower or 'cvshealth' in name_lower or 'paypal' in name_lower or 'micron' in name_lower
+        
+        if is_top8_site:
+            total_found = len(unique_jobs)
+            jobs = jobs[:8]
+            site_name = "CVS Health" if ('cvs' in name_lower) else ("PayPal" if 'paypal' in name_lower else "Micron")
+            print(f"[+] Limited {site_name} jobs to top 8 (out of {total_found} total)")
+        
         job_data['jobs'] = jobs
         
         # Update total_jobs to match actual extracted jobs
@@ -569,10 +727,14 @@ def get_detailed_content(url, website_name, website_config=None):
         if website_config and website_config.get('interactive') and website_config.get('filters'):
             # Determine which filter function to use based on website
             website_url = url.lower()
-            if 'cisco.com' in website_url or 'cisco' in website_name.lower():
+            name_lower = website_name.lower()
+            
+            if 'cisco.com' in website_url or 'cisco' in name_lower:
                 apply_cisco_filters(driver, website_config['filters'])
-            elif 'cvshealth.com' in website_url or 'cvs' in website_name.lower():
+            elif 'cvshealth.com' in website_url or 'cvs' in name_lower:
                 apply_cvs_filters(driver, website_config['filters'])
+            elif 'adobe.com' in website_url or 'adobe' in name_lower:
+                apply_adobe_filters(driver, website_config['filters'])
             else:
                 # Generic filter application
                 apply_cvs_filters(driver, website_config['filters'])
@@ -635,8 +797,8 @@ def send_telegram_alert(message, is_error=False):
 # --- Function: Get File Paths for Website ---
 def get_file_paths(website_name):
     """Get hash and data file paths for a website"""
-    # Sanitize website name for filename
-    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', website_name)
+    # Sanitize website name for filename (using pre-compiled pattern)
+    safe_name = _RE_SAFE_NAME.sub('_', website_name)
     return {
         'hash_file': f"data/{safe_name}_hash.txt",
         'data_file': f"data/{safe_name}_data.json"
@@ -723,26 +885,54 @@ def compare_job_postings(old_data, new_data, website_name):
     if not old_data or not new_data:
         return None  # First run, don't alert
     
-    # Get job lists as dictionaries for O(1) lookup
-    old_jobs = {job.get('identifier', job.get('title', '')): job 
-                for job in old_data.get('jobs', []) if job.get('identifier') or job.get('title')}
-    new_jobs = {job.get('identifier', job.get('title', '')): job 
-                for job in new_data.get('jobs', []) if job.get('identifier') or job.get('title')}
+    # Cache website name check
+    name_lower = website_name.lower()
+    is_cvs = 'cvs' in name_lower or 'cvshealth' in name_lower
+    is_paypal = 'paypal' in name_lower
+    is_micron = 'micron' in name_lower
+    is_top8_site = is_cvs or is_paypal or is_micron
+    
+    old_jobs_list = old_data.get('jobs', [])
+    new_jobs_list = new_data.get('jobs', [])
+    
+    if is_top8_site:
+        # Only compare top 8 for these websites
+        old_jobs_list = old_jobs_list[:8]
+        new_jobs_list = new_jobs_list[:8]
+        site_type = "CVS Health" if is_cvs else ("PayPal" if is_paypal else "Micron")
+        print(f"[+] Comparing top 8 jobs for {site_type}")
+    
+    # Get job lists as dictionaries for O(1) lookup (preserve order)
+    old_jobs = {}
+    for job in old_jobs_list:
+        identifier = job.get('identifier') or job.get('title', '')
+        if identifier and identifier not in old_jobs:
+            old_jobs[identifier] = job
+    
+    new_jobs = {}
+    for job in new_jobs_list:
+        identifier = job.get('identifier') or job.get('title', '')
+        if identifier and identifier not in new_jobs:
+            new_jobs[identifier] = job
     
     # Find new jobs using set operations
-    new_job_identifiers = set(new_jobs.keys()) - set(old_jobs.keys())
+    old_keys = set(old_jobs.keys())
+    new_keys = set(new_jobs.keys())
+    new_job_identifiers = new_keys - old_keys
     
     # Only alert if there are new jobs
     if not new_job_identifiers:
         return None
     
     changes = []
-    new_jobs_list = [new_jobs[identifier] for identifier in new_job_identifiers]
+    new_jobs_found = [new_jobs[identifier] for identifier in new_job_identifiers]
     
-    changes.append(f"🆕 <b>New Jobs Found: {len(new_jobs_list)}</b>")
+    changes.append(f"🆕 <b>New Jobs Found: {len(new_jobs_found)}</b>")
+    if is_top8_site:
+        changes.append(f"(Comparing top 8 jobs only)")
     
     # Show new job titles (limit to 10)
-    for i, job in enumerate(new_jobs_list[:10], 1):
+    for i, job in enumerate(new_jobs_found[:10], 1):
         title = job.get('title', 'Unknown Position')
         url = job.get('url', '')
         if url:
@@ -750,19 +940,20 @@ def compare_job_postings(old_data, new_data, website_name):
         else:
             changes.append(f"{i}. {title}")
     
-    if len(new_jobs_list) > 10:
-        changes.append(f"... and {len(new_jobs_list) - 10} more new jobs")
+    if len(new_jobs_found) > 10:
+        changes.append(f"... and {len(new_jobs_found) - 10} more new jobs")
     
     # Add count change info
-    old_total = old_data.get('total_jobs', len(old_jobs))
-    new_total = new_data.get('total_jobs', len(new_jobs))
+    old_total = len(old_jobs)
+    new_total = len(new_jobs)
     if old_total != new_total:
-        changes.append(f"\n📊 <b>Total Jobs:</b> {old_total} → {new_total}")
+        changes.append(f"\n📊 <b>Top Jobs Count:</b> {old_total} → {new_total}")
     
-    # Only alert about removed jobs if significant (> 5 removed)
-    removed_job_identifiers = set(old_jobs.keys()) - set(new_jobs.keys())
-    if removed_job_identifiers and len(removed_job_identifiers) > 5:
-        changes.append(f"\n🗑️ <b>Jobs Removed:</b> {len(removed_job_identifiers)} positions no longer listed")
+    # Only alert about removed jobs if significant (> 2 removed for top 8 sites, > 5 for others)
+    removed_job_identifiers = old_keys - new_keys
+    threshold = 2 if is_top8_site else 5
+    if removed_job_identifiers and len(removed_job_identifiers) > threshold:
+        changes.append(f"\n🗑️ <b>Jobs Removed:</b> {len(removed_job_identifiers)} positions no longer in top list")
     
     return "\n".join(changes)
 
@@ -771,14 +962,26 @@ def compare_job_postings(old_data, new_data, website_name):
 _RE_SCRIPT_TAGS = re.compile(r'<script[^>]*>.*?</script>', re.DOTALL | re.IGNORECASE)
 _RE_STYLE_TAGS = re.compile(r'<style[^>]*>.*?</style>', re.DOTALL | re.IGNORECASE)
 _RE_COMMENTS = re.compile(r'<!--.*?-->', re.DOTALL)
-_RE_DYNAMIC_ATTRS = re.compile(r'\s+(?:data-[^=]*|id|class|data-timestamp|data-time|timestamp|sessionid|csrf-token)="[^"]*"')
+_RE_DYNAMIC_ATTRS = re.compile(r'\s+(?:data-[^=]*|id|class|data-timestamp|data-time|timestamp|sessionid|csrf-token|data-ph-at-[^=]*|data-testid|aria-[^=]*|data-analytics|data-tracking|data-gtm|data-ga)="[^"]*"')
 _RE_TIMESTAMP_ISO = re.compile(r'\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[.\d]*[Z+-]?\d*')
 _RE_TIMESTAMP_DATE = re.compile(r'\d{1,2}/\d{1,2}/\d{4}')
 _RE_HEX_TOKENS = re.compile(r'[a-f0-9]{32,}')
+_RE_SHORT_HEX_TOKENS = re.compile(r'\b[a-f0-9]{16,31}\b')  # Shorter hex tokens (16-31 chars)
+_RE_POSTED_AGO = re.compile(r'Posted\s+\d+\s+(?:day|days|week|weeks|month|months|hour|hours|minute|minutes)\s+ago', re.IGNORECASE)
+_RE_NUMERIC_IDS = re.compile(r'\b\d{10,}\b')  # Long numeric IDs (likely dynamic)
+_RE_ANALYTICS_CODES = re.compile(r'(?:utm_[^=&\s]+|_ga[^=&\s]+|gclid[^=&\s]+|fbclid[^=&\s]+)', re.IGNORECASE)
 _RE_HTML_TAGS = re.compile(r'<[^>]+>')
 _RE_WHITESPACE = re.compile(r'\s+')
+_RE_MULTIPLE_SPACES = re.compile(r'\s{2,}')
+_RE_URL_WITH_QUERY = re.compile(r'https?://[^\s]+\?[^\s]+')
+_RE_PATH_WITH_QUERY = re.compile(r'/[^\s]+\?[^\s]+')
+_RE_CVS_JOB_ID_PATTERN = re.compile(r'R\d{7,}')
+_RE_CVS_CATEGORY_ID = re.compile(r'category_phs_[^/\s]+')
+_RE_CVS_SUBCATEGORY_ID = re.compile(r'subCategory_phs_[^/\s]+')
+_RE_CVS_DATA_ATTR = re.compile(r'data-ph-at-[^=:\s]+')
+_RE_SAFE_NAME = re.compile(r'[^a-zA-Z0-9_-]')
 
-def clean_content_for_hash(content):
+def clean_content_for_hash(content, website_name=None):
     """Clean HTML content to remove dynamic elements before hashing"""
     # Remove script tags (JavaScript can be dynamic)
     content = _RE_SCRIPT_TAGS.sub('', content)
@@ -789,26 +992,59 @@ def clean_content_for_hash(content):
     # Remove comments
     content = _RE_COMMENTS.sub('', content)
     
-    # Remove common dynamic attributes (timestamps, IDs, etc.)
+    # Remove common dynamic attributes (timestamps, IDs, analytics, etc.)
     content = _RE_DYNAMIC_ATTRS.sub('', content)
+    
+    # Remove analytics codes and tracking codes
+    content = _RE_ANALYTICS_CODES.sub('', content)
     
     # Remove timestamps in various formats
     content = _RE_TIMESTAMP_ISO.sub('', content)
     content = _RE_TIMESTAMP_DATE.sub('', content)
     
-    # Remove random IDs and tokens
-    content = _RE_HEX_TOKENS.sub('', content)  # Remove long hex strings (likely tokens)
+    # Remove "Posted X days ago" patterns (common in job listings)
+    content = _RE_POSTED_AGO.sub('', content)
+    
+    # Remove random IDs and tokens (long hex strings)
+    content = _RE_HEX_TOKENS.sub('', content)
+    
+    # Remove shorter hex tokens (16-31 chars) - common in dynamic IDs
+    content = _RE_SHORT_HEX_TOKENS.sub('', content)
+    
+    # Remove long numeric IDs (likely dynamic identifiers)
+    content = _RE_NUMERIC_IDS.sub('', content)
     
     # Extract only text content and links
     text_content = _RE_HTML_TAGS.sub(' ', content)  # Remove HTML tags
-    text_content = _RE_WHITESPACE.sub(' ', text_content)  # Normalize whitespace
+    
+    # Remove URLs with query parameters (they often contain dynamic tracking)
+    text_content = _RE_URL_WITH_QUERY.sub('', text_content)
+    text_content = _RE_PATH_WITH_QUERY.sub('', text_content)
+    
+    # Normalize whitespace
+    text_content = _RE_WHITESPACE.sub(' ', text_content)
+    text_content = _RE_MULTIPLE_SPACES.sub(' ', text_content)
     text_content = text_content.strip()
+    
+    # Website-specific cleaning for CVS Health
+    if website_name:
+        name_lower = website_name.lower()
+        if 'cvs' in name_lower or 'cvshealth' in name_lower:
+            # Remove common CVS Health dynamic patterns (using pre-compiled patterns)
+            text_content = _RE_CVS_JOB_ID_PATTERN.sub('', text_content)  # Remove CVS job IDs like R0798922
+            text_content = _RE_CVS_CATEGORY_ID.sub('', text_content)  # Remove category IDs
+            text_content = _RE_CVS_SUBCATEGORY_ID.sub('', text_content)  # Remove subcategory IDs
+            text_content = _RE_CVS_DATA_ATTR.sub('', text_content)  # Remove CVS data attributes
+            # Normalize again after CVS-specific cleaning
+            text_content = _RE_WHITESPACE.sub(' ', text_content)
+            text_content = _RE_MULTIPLE_SPACES.sub(' ', text_content)
+            text_content = text_content.strip()
     
     return text_content
 
-def get_hash(content):
+def get_hash(content, website_name=None):
     """Generate hash for content (using cleaned version)"""
-    cleaned = clean_content_for_hash(content)
+    cleaned = clean_content_for_hash(content, website_name)
     return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()
 
 def check_website(website_config):
@@ -829,8 +1065,9 @@ def check_website(website_config):
         if not isinstance(content_data, dict):
             raise ValueError(f"content_data must be a dict, got {type(content_data)}")
         
+        # Cache jobs count (calculate once)
         jobs_count = len(content_data.get('jobs', []))
-        current_hash = get_hash(content)
+        current_hash = get_hash(content, website_name)
         
         # Load previous data
         last_hash, previous_data = load_previous_data(website_name)
@@ -846,8 +1083,7 @@ def check_website(website_config):
             )
             return
         
-        # Check if we have jobs extracted
-        jobs_count = len(content_data.get('jobs', []))
+        # Check if we have jobs extracted (jobs_count already calculated above)
         previous_jobs_count = len(previous_data.get('jobs', [])) if previous_data else 0
         
         if last_hash != current_hash:

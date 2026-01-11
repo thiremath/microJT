@@ -478,3 +478,126 @@ def apply_cvs_filters(driver, filters_config):
     except Exception as e:
         print(f"[-] Error applying CVS filters: {e}")
         traceback.print_exc()
+
+
+# ============================================================================
+# Adobe-Specific Functions
+# ============================================================================
+
+def wait_for_adobe_filters(driver, max_wait=15):
+    """Wait for Adobe Careers filter elements to be visible"""
+    return wait_for_filters(
+        driver,
+        "//input[@type='checkbox']",
+        max_wait,
+        "Adobe filters"
+    )
+
+
+def apply_adobe_filters(driver, filters_config):
+    """Apply filters for Adobe Careers job search"""
+    try:
+        print("[+] Applying Adobe filters...")
+        time.sleep(3)  # Initial wait for page to load
+        
+        if not wait_for_adobe_filters(driver):
+            print("[-] Warning: Filters may not be fully loaded")
+        
+        expand_collapsed_sections(driver)
+        time.sleep(1)
+        
+        # Apply Experience Level filter
+        if filters_config.get('experience_level'):
+            experience_level = filters_config['experience_level']
+            print(f"[+] Selecting experience level: {experience_level}")
+            time.sleep(1)
+            
+            selectors = [
+                f"//label[normalize-space(text())='{{text}}']",
+                f"//label[contains(text(), '{{text}}')]",
+                f"//label[contains(text(), '{{text}}') and @for]",
+                f"//label[contains(text(), '{{text}}')]/preceding-sibling::input[@type='checkbox']",
+                f"//label[contains(text(), '{{text}}')]/following-sibling::input[@type='checkbox']",
+                f"//*[normalize-space(text())='{{text}}']/ancestor::*[1]//input[@type='checkbox']",
+                f"//*[contains(text(), '{{text}}')]/ancestor::li//input[@type='checkbox']",
+                f"//*[contains(text(), '{{text}}')]/ancestor::div//input[@type='checkbox']",
+                f"//input[@type='checkbox' and contains(@aria-label, '{{text}}')]",
+            ]
+            
+            experience_selectors = [s.format(text=experience_level) for s in selectors]
+            find_and_click_checkbox(
+                driver,
+                experience_level,
+                experience_selectors,
+                "Experience level",
+                debug_info={
+                    'xpath': "//input[@type='checkbox']",
+                    'print_func': lambda id, aria, data, label: print(
+                        f"[DEBUG]   - id={id}, aria-label={aria}, label text={label}"
+                    )
+                }
+            )
+        
+        # Apply Teams filter
+        if filters_config.get('teams'):
+            teams = filters_config['teams']
+            if isinstance(teams, str):
+                teams = [teams]
+            print(f"[+] Selecting teams: {teams}")
+            time.sleep(1)
+            
+            selectors = [
+                f"//label[normalize-space(text())='{{text}}']",
+                f"//label[contains(text(), '{{text}}')]",
+                f"//label[contains(text(), '{{text}}') and @for]",
+                f"//label[contains(text(), '{{text}}')]/preceding-sibling::input[@type='checkbox']",
+                f"//label[contains(text(), '{{text}}')]/following-sibling::input[@type='checkbox']",
+                f"//*[normalize-space(text())='{{text}}']/ancestor::*[1]//input[@type='checkbox']",
+                f"//*[contains(text(), '{{text}}')]/ancestor::li//input[@type='checkbox']",
+                f"//*[contains(text(), '{{text}}')]/ancestor::div//input[@type='checkbox']",
+                f"//input[@type='checkbox' and contains(@aria-label, '{{text}}')]",
+            ]
+            
+            for team in teams:
+                team_selectors = [s.format(text=team) for s in selectors]
+                find_and_click_checkbox(
+                    driver,
+                    team,
+                    team_selectors,
+                    "Team",
+                    debug_info={
+                        'xpath': "//input[@type='checkbox']",
+                        'print_func': lambda id, aria, data, label: print(
+                            f"[DEBUG]   - id={id}, aria-label={aria}, label text={label}"
+                        )
+                    }
+                )
+        
+        # Apply Sort by Most Recent
+        if filters_config.get('sort_by') == 'Most recent':
+            print("[+] Sorting by Most recent...")
+            time.sleep(1)
+            
+            select_selectors = [
+                "//select[contains(@class, 'sort')]",
+                "//select[contains(@id, 'sort')]",
+                "//select[contains(@name, 'sort')]",
+                "//select[@aria-label*='sort' or @aria-label*='Sort']",
+                "//*[contains(text(), 'Sort by')]/following-sibling::select",
+                "//*[contains(text(), 'Sort by')]/parent::*/select",
+            ]
+            
+            button_selectors = [
+                "//*[contains(text(), 'Sort by')]",
+                "//*[contains(text(), 'Most recent')]",
+                "//button[contains(@aria-label, 'sort') or contains(@aria-label, 'Sort')]",
+            ]
+            
+            apply_sort_filter(driver, "Most recent", select_selectors, button_selectors)
+        
+        print("[+] Adobe filters applied, waiting for results to load...")
+        time.sleep(3)
+        
+    except Exception as e:
+        print(f"[-] Error applying Adobe filters: {e}")
+        traceback.print_exc()
