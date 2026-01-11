@@ -74,6 +74,20 @@
       "enabled": true,
       "check_interval": 600,
       "description": "JPMorgan Chase - Technology, Data & Analytics Jobs"
+    },
+    {
+      "name": "Cognizant Careers",
+      "url": "https://careers.cognizant.com/us-en/jobs/?keyword=&location=United+States&radius=100&lat=&lng=&cname=United+States&ccode=US&team=Technology+%26+Engineering&pagesize=10#results",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Cognizant - Technology & Engineering Jobs (US)"
+    },
+    {
+      "name": "ServiceNow Careers",
+      "url": "https://careers.servicenow.com/jobs/?search=&team=Engineering%2C+Infrastructure+and+Operations&team=IT&team=Digital+Technology&jobPostingType=Early+Career&country=United+States&pagesize=20#results",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "ServiceNow - Engineering, IT & Digital Technology Early Career Jobs (US)"
     }
   ],
   "telegram": {
