@@ -1,69 +1,56 @@
-# 🚀 Generic Website Tracker
+# 🚀 Job Posting Tracker
 
-A smart, generic website tracker that monitors any website for changes and sends Telegram alerts when updates are detected. Supports monitoring multiple websites simultaneously.
+A smart job posting tracker that monitors multiple job boards and sends Telegram alerts when new job postings are detected. Perfect for tracking job opportunities from companies like Goldman Sachs, Apple, Microsoft, Barclays, and PayPal.
 
 ## ✨ Features
 
-- **Generic Website Monitoring**: Monitor any website, not just job listings
-- **Multiple Website Support**: Track multiple websites simultaneously
-- **Smart Change Detection**: Detects content changes, link additions/removals, and count changes
-- **Telegram Notifications**: Sends detailed alerts with change descriptions
-- **Cloud-Ready**: Optimized for Render deployment
+- **Job-Specific Tracking**: Focused on detecting new job postings, not just website changes
+- **Multiple Job Boards**: Track multiple job boards simultaneously
+- **Website-Specific Patterns**: Uses optimized URL patterns for each job board:
+  - **Goldman Sachs**: `/roles/` pattern
+  - **Apple**: `/details/` pattern
+  - **Barclays, Microsoft, PayPal**: `/job` pattern
+- **Smart Change Detection**: Only alerts when new jobs are actually posted
+- **Telegram Notifications**: Sends detailed alerts with job titles and direct links
 - **Robust Error Handling**: Comprehensive error handling and logging
 - **Configurable**: Easy JSON-based configuration
 
 ## 📱 Sample Telegram Messages
 
-When changes are detected, you'll receive messages like:
+When new jobs are posted, you'll receive messages like:
 
 ```
 🚨 CHANGE DETECTED
 ⏰ 2024-01-15 14:30:25
 
-Website Updated: Goldman Sachs Jobs
+🆕 New Jobs: Goldman Sachs Jobs
 
-🔗 View Website
+📝 Goldman Sachs - Data Analytics, Reporting & Software Engineering Jobs
+
+🔗 View All Jobs
 
 📊 Current Status:
-• Page Title: Goldman Sachs Careers
-• Content Size: 45230 characters
-• Links Found: 25
+• Total Jobs: 62
+• Jobs Tracked: 20
 
-📝 Changes Detected:
+📝 New Job Postings:
+🆕 New Jobs Found: 3
 
-📊 Content size changed: 45230 → 45890 characters
-🔗 New links found: 3
-📈 Counts changed: {'matches': [('20', '59')]} → {'matches': [('20', '62')]}
+1. Software Engineer - Machine Learning
+2. Data Analyst - Associate
+3. Backend Developer - Analyst
+
+📊 Total Jobs: 59 → 62
 ```
-
-## 🚀 Render Deployment
-
-### Quick Deploy Steps:
-
-1. **Push your code to GitHub**
-2. **Go to [render.com](https://render.com)**
-3. **Sign up with GitHub account**
-4. **Click "New +" → "Web Service"** (Free tier)
-5. **Connect your GitHub repository**
-6. **Configure:**
-   - **Name:** `website-tracker`
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python app.py`
-   - **Plan:** `Free`
-7. **Set Environment Variables:**
-   - `TELEGRAM_BOT_TOKEN` = your bot token
-   - `TELEGRAM_CHAT_ID` = your chat ID
-8. **Click "Create Web Service"**
 
 ## 📁 Project Structure
 
 ```
 website_tracker/
-├── tracker.py              # Main tracker script (generic)
-├── app.py                  # Web service wrapper for Render
-├── config.json             # Website configuration
+├── tracker.py              # Main job posting tracker
+├── config.json             # Job board configuration
 ├── requirements.txt        # Python dependencies
-├── render.yaml             # Render deployment config
+├── .env                    # Environment variables (create this)
 ├── data/                   # Auto-generated data files
 │   ├── Website_Name_hash.txt
 │   └── Website_Name_data.json
@@ -72,57 +59,33 @@ website_tracker/
 
 ## ⚙️ Configuration
 
-### 1. Create `config.json`
+### 1. Pre-configured Job Boards
 
-Create a `config.json` file with your website configurations:
+Your `config.json` already includes 5 major job boards:
 
-```json
-{
-  "websites": [
-    {
-      "name": "Goldman Sachs Jobs",
-      "url": "https://higher.gs.com/results?...",
-      "enabled": true,
-      "check_interval": 600,
-      "description": "Goldman Sachs Software Engineering Jobs"
-    },
-    {
-      "name": "Another Website",
-      "url": "https://example.com/jobs",
-      "enabled": true,
-      "check_interval": 300,
-      "description": "Example job board"
-    }
-  ],
-  "telegram": {
-    "bot_token": null,
-    "chat_id": null
-  },
-  "global_settings": {
-    "default_check_interval": 600,
-    "page_load_wait": 8,
-    "extract_content": true
-  }
-}
-```
+- **Goldman Sachs Jobs** - Data Analytics, Reporting & Software Engineering
+- **Barclays Jobs** - United States listings
+- **Microsoft Careers** - Software Engineering, Research, Applied & Data Sciences
+- **Apple Jobs** - ML/AI, Software Engineering, DevOps, Security & Analytics
+- **PayPal Careers** - Software Engineering, Data Science & ML Engineering
 
 ### 2. Environment Variables
 
-**Required:**
-- `TELEGRAM_BOT_TOKEN` - Your Telegram bot token
-- `TELEGRAM_CHAT_ID` - Your Telegram chat ID
+Create a `.env` file in the project root:
 
-**Optional:**
-- `CONFIG_FILE` - Path to config file (default: `config.json`)
-- `CHECK_INTERVAL` - Default check interval in seconds
+```bash
+TELEGRAM_BOT_TOKEN=7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E
+TELEGRAM_CHAT_ID=your_chat_id_here
+CHECK_INTERVAL=600
+```
 
 ### 3. Website Configuration Options
 
-Each website in `config.json` can have:
-- **`name`** (required): Display name for the website
-- **`url`** (required): URL to monitor
+Each job board in `config.json` can have:
+- **`name`** (required): Display name for the job board
+- **`url`** (required): URL to monitor (filtered job search page)
 - **`enabled`** (optional): Enable/disable monitoring (default: `true`)
-- **`check_interval`** (optional): Check interval in seconds (default: 600)
+- **`check_interval`** (optional): Check interval in seconds (default: 600 = 10 minutes)
 - **`description`** (optional): Description shown in notifications
 
 ## 🔧 Setup Instructions
@@ -136,7 +99,7 @@ Your bot is already created: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
 ### 2. Get Your Chat ID
 
 1. **Message your bot** on Telegram: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
-2. **Visit this URL** (replace with your bot token if needed):
+2. **Visit this URL**:
    ```
    https://api.telegram.org/bot7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E/getUpdates
    ```
@@ -152,136 +115,151 @@ TELEGRAM_CHAT_ID=your_chat_id_here
 CHECK_INTERVAL=600
 ```
 
-### 4. Configure Websites
-
-Your `config.json` already includes 5 job boards:
-- Goldman Sachs
-- Barclays
-- Microsoft
-- Apple
-- PayPal
-
-You can edit `config.json` to add/remove websites or adjust check intervals.
-
-### 5. Run Locally
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run tracker
-python tracker.py
-```
-
-The tracker will start monitoring all enabled websites and send Telegram notifications when changes are detected!
-
-## 🧪 Testing Locally
-
-### 1. Install Dependencies
+### 4. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Environment Variables
-
-Create a `.env` file in the project root:
+### 5. Run the Tracker
 
 ```bash
-# .env file
-TELEGRAM_BOT_TOKEN=7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E
-TELEGRAM_CHAT_ID=your_chat_id_here
-CHECK_INTERVAL=600
-```
-
-**To get your Chat ID:**
-1. Message your bot on Telegram: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
-2. Visit: `https://api.telegram.org/bot7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E/getUpdates`
-3. Find your `chat_id` in the response (look for `"chat":{"id":123456789}`)
-
-### 3. Run the Tracker
-
-```bash
-# Run tracker (monitors all websites from config.json)
 python tracker.py
 ```
 
 The tracker will:
-- Load websites from `config.json`
-- Monitor all enabled websites simultaneously
-- Send Telegram notifications when changes are detected
-- Store data in `data/` directory
+- Load job boards from `config.json`
+- Monitor all enabled job boards simultaneously
+- Extract job postings using website-specific patterns
+- Send Telegram notifications when new jobs are detected
+- Store tracking data in `data/` directory
+
+## 🎯 How It Works
+
+### Job Detection
+
+The tracker uses website-specific URL patterns to accurately detect job postings:
+
+- **Goldman Sachs**: Detects links containing `/roles/` or `/roles`
+- **Apple**: Detects links containing `/details/` or `/details`
+- **Barclays, Microsoft, PayPal**: Detects links containing `/job` or `/jobs`
+
+### Change Detection
+
+1. **Hash Comparison**: Compares page content hash to detect changes
+2. **Job Extraction**: Extracts job titles and URLs from the page
+3. **Job Comparison**: Compares current jobs with previous check
+4. **Smart Filtering**: Only alerts when new jobs are actually posted
+5. **Notification**: Sends Telegram message with new job details
+
+### False Positive Prevention
+
+- Filters out dynamic content (timestamps, session IDs, ads)
+- Only alerts on meaningful job changes
+- Ignores minor page updates
+- Validates job links match expected patterns
 
 ## 📊 What Gets Tracked
 
-- **Content Changes**: Detects changes in page content
-- **Link Changes**: New links added or removed
-- **Count Changes**: Changes in count patterns (results, items, etc.)
-- **Page Title Changes**: Changes in page title
-- **Content Size**: Changes in overall content size
+- **New Job Postings**: Detects when new jobs are added
+- **Job Count Changes**: Tracks total number of jobs
+- **Job Titles**: Extracts and compares job titles
+- **Job URLs**: Captures direct links to job postings
+- **Page Updates**: Monitors for significant changes
+
+## ⏱️ Check Intervals
+
+Default check interval: **10 minutes (600 seconds)**
+
+You can customize the interval for each job board in `config.json`:
+
+```json
+{
+  "name": "Goldman Sachs Jobs",
+  "check_interval": 300,  // 5 minutes
+  ...
+}
+```
+
+Common intervals:
+- `60` = 1 minute (very frequent)
+- `300` = 5 minutes
+- `600` = 10 minutes (default)
+- `1800` = 30 minutes
+- `3600` = 1 hour
 
 ## 🔍 Troubleshooting
 
 ### Common Issues:
 
-1. **Build Failures**: Check that `requirements.txt` is correct
-2. **Runtime Errors**: Check logs in Render dashboard
-3. **Telegram Notifications**: Verify bot token and chat ID
-4. **Chrome/Selenium Issues**: Code includes fallback methods
-5. **Config Errors**: Verify `config.json` is valid JSON
+1. **ChromeDriver Errors**: 
+   - Install ChromeDriver: `brew install chromedriver`
+   - The tracker will automatically fall back to system ChromeDriver
 
-### Render Free Tier Limits:
+2. **No Jobs Detected**:
+   - Check that the URL in `config.json` is correct
+   - Verify the job board page loads correctly
+   - Check console logs for extraction errors
 
-- **750 hours/month** (31 days)
-- **Web services** supported
-- **Automatic restarts** on failures
-- **GitHub integration** for auto-deploy
+3. **Telegram Notifications Not Working**:
+   - Verify bot token and chat ID in `.env` file
+   - Make sure you've messaged the bot first
+   - Check Telegram API status
 
-## 📈 Monitoring Multiple Websites
+4. **False Alerts**:
+   - The tracker filters dynamic content automatically
+   - If you still get false alerts, the hash cleaning may need adjustment
 
-The tracker supports monitoring multiple websites:
+5. **Config Errors**:
+   - Verify `config.json` is valid JSON
+   - Check that all required fields are present
 
-- **Single Website**: Simple loop monitoring
-- **Multiple Websites**: Each website runs in its own thread
-- **Independent Intervals**: Each website can have its own check interval
-- **Separate Data Files**: Each website has its own hash and data files
+## 📈 Monitoring Multiple Job Boards
+
+The tracker supports monitoring multiple job boards:
+
+- **Parallel Monitoring**: Each job board runs in its own thread
+- **Independent Intervals**: Each job board can have its own check interval
+- **Separate Data Files**: Each job board has its own hash and data files
+- **Isolated Errors**: Errors for one job board don't affect others
 
 ## 🛡️ Error Handling
 
 - **Network Issues**: Automatic retry and error reporting
-- **Page Changes**: Generic extraction methods work with any website
+- **Page Changes**: Adapts to website structure changes
 - **Telegram Failures**: Detailed error logging
-- **Cloud Environment**: Chrome driver auto-installation
-- **Per-Website Errors**: Errors for one website don't affect others
+- **Chrome Driver**: Multiple fallback methods for driver setup
+- **Per-Job Board Errors**: Errors for one job board don't affect others
 
-## 📝 Example Configurations
+## 📝 Adding New Job Boards
 
-### Job Board Monitoring
+To add a new job board, edit `config.json`:
+
 ```json
 {
-  "name": "Tech Jobs",
-  "url": "https://techjobs.com/listings",
-  "check_interval": 300
+  "websites": [
+    {
+      "name": "New Job Board",
+      "url": "https://jobs.example.com/search?...",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Description of the job board"
+    }
+  ]
 }
 ```
 
-### News Website
-```json
-{
-  "name": "Tech News",
-  "url": "https://technews.com/latest",
-  "check_interval": 1800
-}
-```
+The tracker will automatically detect the URL pattern:
+- If URL contains `/roles` → Uses GS pattern
+- If URL contains `/details` → Uses Apple pattern
+- Otherwise → Uses generic `/job` pattern
 
-### Product Page
-```json
-{
-  "name": "Product Availability",
-  "url": "https://store.com/product/123",
-  "check_interval": 60
-}
-```
+## 🚀 Performance Tips
+
+- **Check Intervals**: Longer intervals (10+ minutes) reduce server load
+- **Multiple Job Boards**: Each runs independently, so adding more doesn't slow down others
+- **Data Storage**: Old data files are automatically managed
+- **Resource Usage**: Uses headless Chrome, minimal resource footprint
 
 ## 📝 License
 
@@ -289,4 +267,4 @@ MIT License - Feel free to modify and use for your own projects!
 
 ---
 
-**Happy Website Monitoring! 🎯**
+**Happy Job Hunting! 🎯**

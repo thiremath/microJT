@@ -34,6 +34,46 @@
       "enabled": true,
       "check_interval": 600,
       "description": "PayPal - Software Engineering, Data Science & ML Engineering (US, Remote)"
+    },
+    {
+      "name": "Meta Careers",
+      "url": "https://www.metacareers.com/jobsearch?sort_by_new=true&teams[0]=University%20Grad%20-%20Engineering%2C%20Tech%20%26%20Design&roles[0]=Full%20time%20employment",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Meta - University Grad Engineering, Tech & Design (Full-time)"
+    },
+    {
+      "name": "CVS Health Jobs",
+      "url": "https://jobs.cvshealth.com/us/en/search-results",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "CVS Health - Innovation and Technology, Data and Analytics",
+      "interactive": true,
+      "filters": {
+        "category": "Innovation and Technology",
+        "sub_category": "Data and Analytics",
+        "sort_by": "Recent"
+      }
+    },
+    {
+      "name": "Cisco Careers",
+      "url": "https://careers.cisco.com/global/en/search-results?s=1",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "Cisco - Professional & Entry Level Talent (US)",
+      "interactive": true,
+      "filters": {
+        "experience_levels": ["Entry Level Talent"],
+        "country": "United States of America",
+        "sort_by": "Most Recent"
+      }
+    },
+    {
+      "name": "JPMorgan Chase Careers",
+      "url": "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs?lastSelectedFacet=CATEGORIES&locationId=300000000289738&selectedCategoriesFacet=300000086152753%3B300000086152508%3B300000086144003%3B300026872751628%3B300000086249595",
+      "enabled": true,
+      "check_interval": 600,
+      "description": "JPMorgan Chase - Technology, Data & Analytics Jobs"
     }
   ],
   "telegram": {

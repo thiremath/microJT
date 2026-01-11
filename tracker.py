@@ -12,6 +12,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from filters import apply_cisco_filters, apply_cvs_filters
+from oracle_hcm_extractor import extract_oracle_hcm_jobs
 
 # Load environment variables from .env file for local development
 def load_env_file():
@@ -215,8 +217,43 @@ def extract_job_postings(driver, website_name):
         jobs = []
         
         # Determine website-specific URL patterns
-        current_url = driver.current_url.lower()
-        website_url = current_url
+        current_url_lower = driver.current_url.lower()
+        current_url_original = driver.current_url  # Keep original for URL construction
+        website_url = current_url_lower
+        
+        # Special handling for Oracle Cloud HCM sites (JPMC, etc.)
+        if 'oraclecloud.com' in website_url or 'jpmc' in website_name.lower() or 'jpmorgan' in website_name.lower():
+            jobs = extract_oracle_hcm_jobs(driver, website_name, current_url_original, website_url)
+        
+        # If we already found jobs with specialized method, skip generic extraction
+        if jobs:
+            # Remove duplicates
+            unique_jobs = {}
+            for job in jobs:
+                identifier = job.get('identifier', job['title'])
+                if identifier not in unique_jobs:
+                    unique_jobs[identifier] = job
+            jobs = list(unique_jobs.values())
+            
+            # Ensure jobs list is valid
+            if not jobs:
+                print(f"[-] Warning: jobs list is empty after deduplication!")
+            else:
+                print(f"[+] Deduplicated to {len(jobs)} unique jobs")
+            
+            # Update job_data with jobs
+            job_data['jobs'] = jobs.copy() if jobs else []  # Use copy to ensure we have a new list
+            if job_data['total_jobs'] == 0 and jobs:
+                job_data['total_jobs'] = len(jobs)
+            
+            # Final verification before return
+            print(f"[+] Successfully extracted {len(jobs)} unique job postings")
+            
+            # Double-check that jobs are actually in job_data
+            if len(job_data.get('jobs', [])) != len(jobs):
+                job_data['jobs'] = jobs.copy()
+            
+            return job_data
         
         # Define website-specific patterns
         if 'gs.com' in website_url or 'goldman' in website_name.lower():
@@ -239,12 +276,36 @@ def extract_job_postings(driver, website_name):
             # PayPal uses /job
             job_patterns = ["a[href*='/job']", "a[href*='/jobs']"]
             print("[+] Using PayPal-specific pattern: /job")
+        elif 'metacareers.com' in website_url or 'meta' in website_name.lower():
+            # Meta uses /job_details
+            job_patterns = ["a[href*='/job_details/']", "a[href*='/job_details']"]
+            print("[+] Using Meta-specific pattern: /job_details")
+        elif 'cvshealth.com' in website_url or 'cvs' in website_name.lower():
+            # CVS Health uses /job or /jobs
+            job_patterns = ["a[href*='/job']", "a[href*='/jobs']"]
+            print("[+] Using CVS Health-specific pattern: /job")
+        elif 'cisco.com' in website_url or 'cisco' in website_name.lower():
+            # Cisco uses /job or /jobs
+            job_patterns = ["a[href*='/job']", "a[href*='/jobs']"]
+            print("[+] Using Cisco-specific pattern: /job")
+        elif 'oraclecloud.com' in website_url or 'jpmc' in website_name.lower() or 'jpmorgan' in website_name.lower():
+            # Oracle Cloud HCM (JPMC, etc.) uses /job/{job_id}/ pattern
+            # Use more specific selectors for Oracle Cloud HCM
+            job_patterns = [
+                "a[href*='/job/']",  # Links with /job/ followed by job ID
+                ".job-grid-item a",
+                ".job-grid-item_link",
+                "[class*='job-grid-item'] a",
+                "[aria-labelledby] a",  # Links with aria-labelledby (contains job ID)
+            ]
+            print("[+] Using Oracle Cloud HCM-specific pattern: /job/{id}/")
         else:
             # Fallback to common patterns
             job_patterns = [
                 "a[href*='/job']",
                 "a[href*='/roles']",
                 "a[href*='/details']",
+                "a[href*='/job_details']",
                 "a[href*='/career']",
                 "a[href*='/position']",
             ]
@@ -283,10 +344,42 @@ def extract_job_postings(driver, website_name):
                                         is_job_link = '/roles' in href_lower
                                     elif 'apple.com' in website_url or 'apple' in website_name.lower():
                                         is_job_link = '/details' in href_lower
+                                    elif 'metacareers.com' in website_url or 'meta' in website_name.lower():
+                                        is_job_link = '/job_details' in href_lower
+                                    elif 'cvshealth.com' in website_url or 'cvs' in website_name.lower():
+                                        is_job_link = '/job' in href_lower
+                                    elif 'cisco.com' in website_url or 'cisco' in website_name.lower():
+                                        is_job_link = '/job' in href_lower
+                                    elif 'oraclecloud.com' in website_url or 'jpmc' in website_name.lower() or 'jpmorgan' in website_name.lower():
+                                        # Oracle Cloud HCM: must match /job/{numeric_id}/ pattern
+                                        # Exclude the search results page itself (/jobs?)
+                                        is_job_link = re.search(r'/job/\d+/', href_lower) is not None
+                                        if not is_job_link:
+                                            # Also check if it's a job link by checking aria-labelledby for numeric ID
+                                            try:
+                                                aria_id = link.get_attribute("aria-labelledby")
+                                                if aria_id and aria_id.isdigit():
+                                                    # Construct the job URL from the job ID
+                                                    base_url = re.sub(r'/jobs.*$', '', website_url)
+                                                    if '/sites/' in base_url:
+                                                        # Extract site path
+                                                        site_match = re.search(r'(/sites/[^/]+)', base_url)
+                                                        if site_match:
+                                                            site_path = site_match.group(1)
+                                                            # Get query params from original URL
+                                                            query_params = ""
+                                                            if '?' in website_url:
+                                                                query_params = '?' + website_url.split('?', 1)[1]
+                                                            href = f"{base_url.split('?')[0].split('/jobs')[0]}{site_path}/job/{aria_id}/{query_params}"
+                                                            is_job_link = True
+                                                            # Update href to the constructed URL
+                                                            link._href = href
+                                            except:
+                                                pass
                                     elif any(x in website_url for x in ['barclays', 'microsoft', 'paypal']):
                                         is_job_link = '/job' in href_lower
                                     else:
-                                        is_job_link = any(pattern in href_lower for pattern in ['/job', '/roles', '/details', '/career', '/position'])
+                                        is_job_link = any(pattern in href_lower for pattern in ['/job', '/roles', '/details', '/job_details', '/career', '/position', '/jobs'])
                                     
                                     if is_job_link:
                                         # Skip navigation and non-job links
@@ -367,19 +460,47 @@ def extract_job_postings(driver, website_name):
             'timestamp': datetime.now().isoformat()
         }
 
+# --- Function: Apply Cisco Filters ---
 # --- Function: Get Detailed Page Content ---
-def get_detailed_content(url, website_name):
+def get_detailed_content(url, website_name, website_config=None):
     """Get both raw content and structured job data"""
     driver = setup_chrome_driver()
     try:
         driver.get(url)
         time.sleep(5)  # wait for JavaScript to load content
         
-        # Get raw content for hash
+        # Check if this website needs interactive filtering
+        if website_config and website_config.get('interactive') and website_config.get('filters'):
+            # Determine which filter function to use based on website
+            website_url = url.lower()
+            if 'cisco.com' in website_url or 'cisco' in website_name.lower():
+                apply_cisco_filters(driver, website_config['filters'])
+            elif 'cvshealth.com' in website_url or 'cvs' in website_name.lower():
+                apply_cvs_filters(driver, website_config['filters'])
+            else:
+                # Generic filter application
+                apply_cvs_filters(driver, website_config['filters'])
+        
+        # Get raw content for hash (after filters applied)
         raw_content = driver.page_source
         
         # Extract job postings
         job_data = extract_job_postings(driver, website_name)
+        
+        # Ensure job_data is a proper dict with all required fields
+        if not isinstance(job_data, dict):
+            job_data = {
+                'page_title': driver.title,
+                'url': driver.current_url,
+                'total_jobs': 0,
+                'jobs': [],
+                'job_count_text': '',
+                'timestamp': datetime.now().isoformat()
+            }
+        
+        # Ensure jobs is a list
+        if 'jobs' not in job_data or not isinstance(job_data['jobs'], list):
+            job_data['jobs'] = []
         
         return raw_content, job_data
     finally:
@@ -467,10 +588,38 @@ def save_data(website_name, hash_value, content_data):
     
     # Save content data
     try:
+        # Ensure content_data has the required structure
+        if not isinstance(content_data, dict):
+            content_data = {'error': 'Invalid data structure', 'jobs': [], 'total_jobs': 0}
+        
+        # Ensure jobs is a list
+        if 'jobs' not in content_data:
+            content_data['jobs'] = []
+        if not isinstance(content_data['jobs'], list):
+            content_data['jobs'] = list(content_data['jobs']) if content_data['jobs'] else []
+        
+        # Verify we can serialize
+        try:
+            json.dumps(content_data)
+        except Exception as e:
+            print(f"[-] Error: Cannot serialize content_data: {e}")
+            # Try to clean the data
+            content_data['jobs'] = [
+                {
+                    'title': str(job.get('title', 'Unknown'))[:200],
+                    'url': str(job.get('url', '')),
+                    'identifier': str(job.get('identifier', ''))
+                }
+                for job in content_data.get('jobs', [])
+            ]
+        
         with open(paths['data_file'], 'w') as f:
             json.dump(content_data, f, indent=2)
+        print(f"[+] Successfully saved data to {paths['data_file']}")
     except Exception as e:
         print(f"[-] Error saving data: {e}")
+        import traceback
+        traceback.print_exc()
 
 # --- Function: Compare Content Data ---
 def compare_job_postings(old_data, new_data, website_name):
@@ -572,8 +721,14 @@ def check_website(website_config):
         print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Checking {website_name}...")
         print(f"🔗 URL: {url}")
         
-        # Get current content
-        content, content_data = get_detailed_content(url, website_name)
+        # Get current content (pass website_config for interactive filtering)
+        content, content_data = get_detailed_content(url, website_name, website_config)
+        
+        # Verify content_data structure
+        if not isinstance(content_data, dict):
+            raise ValueError(f"content_data must be a dict, got {type(content_data)}")
+        
+        jobs_count = len(content_data.get('jobs', []))
         current_hash = get_hash(content)
         
         # Load previous data
@@ -589,6 +744,10 @@ def check_website(website_config):
                 f"Initial data saved. Monitoring for changes..."
             )
             return
+        
+        # Check if we have jobs extracted
+        jobs_count = len(content_data.get('jobs', []))
+        previous_jobs_count = len(previous_data.get('jobs', [])) if previous_data else 0
         
         if last_hash != current_hash:
             print(f"[!] Hash changed for {website_name} - checking for new job postings...")
@@ -616,8 +775,26 @@ def check_website(website_config):
             
             # Always save the new hash and data (even if no alert sent)
             save_data(website_name, current_hash, content_data)
+        elif jobs_count > 0 and (previous_jobs_count == 0 or jobs_count != previous_jobs_count):
+            # Hash is the same but we have jobs and the count changed, or we didn't have jobs before
+            # This can happen if the page structure changed but content hash is similar
+            print(f"[!] Hash unchanged but job count changed ({previous_jobs_count} -> {jobs_count}) - updating data.")
+            save_data(website_name, current_hash, content_data)
+        elif jobs_count > 0 and previous_jobs_count == 0:
+            # We have jobs now but didn't before - save it
+            print(f"[!] Jobs found for first time ({jobs_count} jobs) - saving data.")
+            save_data(website_name, current_hash, content_data)
         else:
             print(f"[=] No change detected for {website_name}.")
+            # Even if hash is same, if we have jobs and previous data was empty, save it
+            if jobs_count > 0 and (not previous_data or not previous_data.get('jobs')):
+                print(f"[!] Previous data was empty but we have {jobs_count} jobs now - saving data.")
+                save_data(website_name, current_hash, content_data)
+            elif jobs_count > 0:
+                # If we have jobs but hash is same, still update the data file to ensure it's current
+                # This handles cases where jobs were extracted but hash didn't change (e.g., same page structure)
+                print(f"[!] Hash unchanged but we have {jobs_count} jobs - ensuring data file is up to date.")
+                save_data(website_name, current_hash, content_data)
             
     except Exception as e:
         error_msg = (
