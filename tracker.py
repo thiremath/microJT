@@ -358,7 +358,7 @@ _RE_CVS_JOB_ID = re.compile(r'/job/R\d+/')
 _RE_ADOBE_MICRON_JOB = re.compile(r'(?:/careers)?/job/([^/?]+)')
 
 def _extract_jobs_from_links(driver, website_config, website_url, website_name, max_links=100):
-    """Extract jobs from links using website-specific patterns"""
+    """Extract jobs from links using website-specific patterns, preserving DOM order"""
     jobs = []
     url_lower = website_url.lower()
     name_lower = website_name.lower()
@@ -381,6 +381,69 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
     all_selectors = job_patterns + common_selectors
     validation_func = website_config.get('validation') if website_config else None
     
+    # For PayPal and similar sites, try to use a single comprehensive selector first
+    # to preserve DOM order better
+    is_paypal = 'paypal' in name_lower or 'paypal' in url_lower
+    if is_paypal and job_patterns:
+        # Try using XPath to get all job links in document order
+        try:
+            # Build XPath from job patterns
+            xpath_parts = []
+            for pattern in job_patterns:
+                if '/job' in pattern:
+                    xpath_parts.append("contains(@href, '/job')")
+                elif '/jobs' in pattern:
+                    xpath_parts.append("contains(@href, '/jobs')")
+            
+            if xpath_parts:
+                xpath = f"//a[{' or '.join(xpath_parts)}]"
+                links = driver.find_elements(By.XPATH, xpath)
+                if links:
+                    print(f"[+] Found {len(links)} potential job links using XPath (DOM order preserved)")
+                    seen_urls = set()
+                    for link in links[:max_links]:
+                        try:
+                            href = link.get_attribute("href")
+                            if not href or not href.strip():
+                                try:
+                                    href = driver.execute_script("return arguments[0].href;", link)
+                                except:
+                                    continue
+                            
+                            if not href or not href.strip() or href in seen_urls:
+                                continue
+                            seen_urls.add(href)
+                            
+                            text = link.text.strip()
+                            if not text or len(text) <= 5:
+                                continue
+                            
+                            href_lower = href.lower()
+                            text_lower = text.lower()
+                            
+                            # Validate link
+                            if validation_func:
+                                is_job_link = validation_func(href, text)
+                            else:
+                                is_job_link = any(pattern in href_lower for pattern in 
+                                                 ['/job', '/roles', '/details', '/job_details', '/career', '/position', '/jobs'])
+                            
+                            if is_job_link and not any(skip in text_lower for skip in _SKIP_KEYWORDS):
+                                jobs.append({
+                                    'title': text[:200],
+                                    'url': href,
+                                    'identifier': f"{text[:50]}_{href[-30:]}"
+                                })
+                        except:
+                            continue
+                    
+                    if jobs:
+                        print(f"[+] Successfully extracted {len(jobs)} jobs using XPath")
+                        return jobs
+        except Exception as e:
+            print(f"[!] XPath extraction failed, falling back to CSS selectors: {e}")
+    
+    # Fallback to original CSS selector approach
     for selector in all_selectors:
         try:
             links = driver.find_elements(By.CSS_SELECTOR, selector)
@@ -389,6 +452,7 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
                 
             print(f"[+] Found {len(links)} potential job links with selector: {selector}")
             
+            seen_urls = set()  # Deduplicate by URL while preserving order
             for link in links[:max_links]:
                 try:
                     href = link.get_attribute("href")
@@ -398,8 +462,9 @@ def _extract_jobs_from_links(driver, website_config, website_url, website_name, 
                         except:
                             continue
                     
-                    if not href or not href.strip():
+                    if not href or not href.strip() or href in seen_urls:
                         continue
+                    seen_urls.add(href)
                     
                     text = link.text.strip()
                     if not text or len(text) <= 5:
@@ -597,21 +662,34 @@ def extract_job_postings(driver, website_name):
                 site_name = 'Adobe' if is_adobe else 'Micron'
                 print(f"[+] No jobs found with strict pattern, trying lenient approach for {site_name}...")
                 try:
-                    # Try multiple selectors
-                    selectors = ["a[href*='/job/']", "a[href*='/careers/job/']", "a[href*='/us/en/job/']",
-                                ".position-title a", ".job-card a", "[class*='position'] a", 
-                                "[class*='job'] a", "[data-testid*='position'] a", "[data-testid*='job'] a"]
+                    # Use a single comprehensive XPath to get all job links in DOM order
+                    # This preserves the order as they appear on the page
+                    xpath = "//a[contains(@href, '/job/') or contains(@href, '/careers/job/') or contains(@href, '/us/en/job/')]"
                     
-                    all_links = []
-                    for selector in selectors:
-                        try:
-                            links = driver.find_elements(By.CSS_SELECTOR, selector)
-                            all_links.extend(links)
-                        except:
-                            continue
+                    try:
+                        all_links = driver.find_elements(By.XPATH, xpath)
+                        print(f"[+] Found {len(all_links)} total links using XPath (DOM order preserved)")
+                    except:
+                        # Fallback to CSS selectors if XPath fails
+                        selectors = ["a[href*='/job/']", "a[href*='/careers/job/']", "a[href*='/us/en/job/']"]
+                        all_links = []
+                        seen_urls_set = set()
+                        for selector in selectors:
+                            try:
+                                links = driver.find_elements(By.CSS_SELECTOR, selector)
+                                for link in links:
+                                    try:
+                                        href = link.get_attribute("href") or driver.execute_script("return arguments[0].href;", link)
+                                        if href and href not in seen_urls_set:
+                                            seen_urls_set.add(href)
+                                            all_links.append(link)
+                                    except:
+                                        continue
+                            except:
+                                continue
+                        print(f"[+] Found {len(all_links)} total links using CSS selectors")
                     
                     if all_links:
-                        print(f"[+] Found {len(all_links)} total links with various selectors")
                         # Use frozensets for O(1) lookup
                         non_job_paths = frozenset(['/search-results', '/careers', '/jobs?', '/dashboard', 
                                                    '/profile', '/settings', '/applications', '/saved'])
