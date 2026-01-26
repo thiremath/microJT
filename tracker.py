@@ -759,15 +759,22 @@ def extract_job_postings(driver, website_name):
         # Convert back to list - order is preserved (first occurrence of each job)
         jobs = list(unique_jobs.values())
         
-        # Limit to top 8 jobs for specific websites (cache name_lower check)
+        # Limit jobs for specific websites (cache name_lower check)
         name_lower = website_name.lower()
-        is_top8_site = 'cvs' in name_lower or 'cvshealth' in name_lower or 'paypal' in name_lower or 'micron' in name_lower
+        is_cvs = 'cvs' in name_lower or 'cvshealth' in name_lower
+        is_paypal = 'paypal' in name_lower
+        is_micron = 'micron' in name_lower
+        is_limited_site = is_cvs or is_paypal or is_micron
         
-        if is_top8_site:
+        if is_limited_site:
             total_found = len(unique_jobs)
-            jobs = jobs[:8]
-            site_name = "CVS Health" if ('cvs' in name_lower) else ("PayPal" if 'paypal' in name_lower else "Micron")
-            print(f"[+] Limited {site_name} jobs to top 8 (out of {total_found} total)")
+            if is_cvs:
+                jobs = jobs[:8]
+                print(f"[+] Limited CVS Health jobs to top 8 (out of {total_found} total)")
+            elif is_paypal or is_micron:
+                jobs = jobs[:10]
+                site_name = "PayPal" if is_paypal else "Micron"
+                print(f"[+] Limited {site_name} jobs to top 10 (out of {total_found} total)")
         
         job_data['jobs'] = jobs
         
@@ -968,17 +975,22 @@ def compare_job_postings(old_data, new_data, website_name):
     is_cvs = 'cvs' in name_lower or 'cvshealth' in name_lower
     is_paypal = 'paypal' in name_lower
     is_micron = 'micron' in name_lower
-    is_top8_site = is_cvs or is_paypal or is_micron
+    is_limited_site = is_cvs or is_paypal or is_micron
     
     old_jobs_list = old_data.get('jobs', [])
     new_jobs_list = new_data.get('jobs', [])
     
-    if is_top8_site:
-        # Only compare top 8 for these websites
-        old_jobs_list = old_jobs_list[:8]
-        new_jobs_list = new_jobs_list[:8]
-        site_type = "CVS Health" if is_cvs else ("PayPal" if is_paypal else "Micron")
-        print(f"[+] Comparing top 8 jobs for {site_type}")
+    if is_limited_site:
+        # Limit comparison based on site type
+        if is_cvs:
+            old_jobs_list = old_jobs_list[:8]
+            new_jobs_list = new_jobs_list[:8]
+            print(f"[+] Comparing top 8 jobs for CVS Health")
+        elif is_paypal or is_micron:
+            old_jobs_list = old_jobs_list[:10]
+            new_jobs_list = new_jobs_list[:10]
+            site_type = "PayPal" if is_paypal else "Micron"
+            print(f"[+] Comparing top 10 jobs for {site_type}")
     
     # Get job lists as dictionaries for O(1) lookup (preserve order)
     old_jobs = {}
@@ -1006,8 +1018,11 @@ def compare_job_postings(old_data, new_data, website_name):
     new_jobs_found = [new_jobs[identifier] for identifier in new_job_identifiers]
     
     changes.append(f"🆕 <b>New Jobs Found: {len(new_jobs_found)}</b>")
-    if is_top8_site:
-        changes.append(f"(Comparing top 8 jobs only)")
+    if is_limited_site:
+        if is_cvs:
+            changes.append(f"(Comparing top 8 jobs only)")
+        elif is_paypal or is_micron:
+            changes.append(f"(Comparing top 10 jobs only)")
     
     # Show new job titles (limit to 10)
     for i, job in enumerate(new_jobs_found[:10], 1):
@@ -1027,9 +1042,9 @@ def compare_job_postings(old_data, new_data, website_name):
     if old_total != new_total:
         changes.append(f"\n📊 <b>Top Jobs Count:</b> {old_total} → {new_total}")
     
-    # Only alert about removed jobs if significant (> 2 removed for top 8 sites, > 5 for others)
+    # Only alert about removed jobs if significant (> 2 removed for limited sites, > 5 for others)
     removed_job_identifiers = old_keys - new_keys
-    threshold = 2 if is_top8_site else 5
+    threshold = 2 if is_limited_site else 5
     if removed_job_identifiers and len(removed_job_identifiers) > threshold:
         changes.append(f"\n🗑️ <b>Jobs Removed:</b> {len(removed_job_identifiers)} positions no longer in top list")
     
