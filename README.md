@@ -74,7 +74,7 @@ Your `config.json` already includes 5 major job boards:
 Create a `.env` file in the project root:
 
 ```bash
-TELEGRAM_BOT_TOKEN=7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHAT_ID=your_chat_id_here
 CHECK_INTERVAL=600
 ```
@@ -90,18 +90,18 @@ Each job board in `config.json` can have:
 
 ## 🔧 Setup Instructions
 
-### 1. Telegram Bot (Already Created!)
+### 1. Create Telegram Bot
 
-Your bot is already created: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
-
-**Bot Token:** `7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E`
+1. **Create a bot** by messaging [@BotFather](https://t.me/BotFather) on Telegram
+2. **Follow the instructions** to create your bot and get your bot token
+3. **Save your bot token** - you'll need it for the `.env` file
 
 ### 2. Get Your Chat ID
 
-1. **Message your bot** on Telegram: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
-2. **Visit this URL**:
+1. **Message your bot** on Telegram (use the username you created)
+2. **Visit this URL** (replace `<YOUR_BOT_TOKEN>` with your actual bot token):
    ```
-   https://api.telegram.org/bot7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E/getUpdates
+   https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
    ```
 3. **Find your `chat_id`** in the JSON response (look for `"chat":{"id":123456789}`)
 
@@ -110,7 +110,7 @@ Your bot is already created: [@gs_tracker_bot](https://t.me/gs_tracker_bot)
 Create a `.env` file in the project root:
 
 ```bash
-TELEGRAM_BOT_TOKEN=7623240757:AAHiPQ8QuwZN8SYRvtCV14RwvF04nCTwP3E
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHAT_ID=your_chat_id_here
 CHECK_INTERVAL=600
 ```
