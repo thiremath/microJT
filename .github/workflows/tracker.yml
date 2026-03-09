@@ -1,0 +1,49 @@
+name: Microsoft Jobs Tracker
+
+on:
+  schedule:
+    # Run every 5 minutes (adjust as needed)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  track-jobs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run job tracker
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        CHECK_INTERVAL: 300
+      run: |
+        python run_once.py
+    
+    - name: Upload job data artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: job-data
+        path: data/
+        retention-days: 7
